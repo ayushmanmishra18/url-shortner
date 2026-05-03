@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"log"
 	"net/url"
+	"os"
 
 	_ "github.com/lib/pq"
 	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
 )
 
 var db *sql.DB
@@ -20,13 +22,11 @@ func encodeBase62(num int64) string {
 	}
 
 	var encoded []byte
-
 	for num > 0 {
 		remainder := num % 62
 		encoded = append([]byte{base62Chars[remainder]}, encoded...)
 		num = num / 62
 	}
-
 	return string(encoded)
 }
 
@@ -37,19 +37,29 @@ func isValidURL(input string) bool {
 }
 
 func main() {
+
+	//  Load .env file (IMPORTANT for local dev)
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found (using system env)")
+	}
+
 	app := fiber.New()
 
-	// Supabase connection (POOLER)
-	connStr := "postgres://postgres.iemvhknbvsvkhxwzhpmq:Ayushmanmishra@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
+	//  Get DB connection string from env
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		log.Fatal("DATABASE_URL not set")
+	}
 
-	var err error
+	// Connect DB
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("DB OPEN ERROR:", err)
 	}
 
 	if err = db.Ping(); err != nil {
-		log.Fatal(err)
+		log.Fatal("DB PING ERROR:", err)
 	}
 
 	log.Println("Connected to Supabase DB")
@@ -61,7 +71,7 @@ func main() {
 		})
 	})
 
-	// shorten URL (DB-driven ID)
+	// shorten URL
 	app.Post("/shorten", func(c *fiber.Ctx) error {
 		type Request struct {
 			URL string `json:"url"`
@@ -82,7 +92,7 @@ func main() {
 
 		var id int64
 
-		// Step 1: Insert URL → get ID
+		// Step 1: Insert and get ID
 		err := db.QueryRow(
 			"INSERT INTO urls (long_url) VALUES ($1) RETURNING id",
 			body.URL,
@@ -95,10 +105,10 @@ func main() {
 			})
 		}
 
-		// Step 2: Generate short code from ID
+		// Step 2: Generate short code
 		code := encodeBase62(id)
 
-		// Step 3: Update row with short_code
+		// Step 3: Update short_code
 		_, err = db.Exec(
 			"UPDATE urls SET short_code=$1 WHERE id=$2",
 			code, id,
@@ -121,7 +131,6 @@ func main() {
 		code := c.Params("code")
 
 		var longURL string
-
 		err := db.QueryRow(
 			"SELECT long_url FROM urls WHERE short_code=$1",
 			code,
@@ -136,5 +145,6 @@ func main() {
 		return c.Redirect(longURL, 302)
 	})
 
-	app.Listen(":3000")
+	// Start server with error handling
+	log.Fatal(app.Listen(":3000"))
 }
