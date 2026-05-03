@@ -83,17 +83,17 @@ func main() {
 		var id int64
 
 		// Step 1: Insert URL → get ID
-		// err := db.QueryRow(
-		// 	"INSERT INTO urls (long_url) VALUES ($1) RETURNING id",
-		// 	body.URL,
-		// ).Scan(&id)
+		err := db.QueryRow(
+			"INSERT INTO urls (long_url) VALUES ($1) RETURNING id",
+			body.URL,
+		).Scan(&id)
 
-		// if err != nil {
-		// 	log.Println("INSERT ERROR:", err)
-		// 	return c.Status(500).JSON(fiber.Map{
-		// 		"error": "Failed to insert URL",
-		// 	})
-		// }
+		if err != nil {
+			log.Println("INSERT ERROR:", err)
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Failed to insert URL",
+			})
+		}
 
 		// Step 2: Generate short code from ID
 		code := encodeBase62(id)
