@@ -1,129 +1,219 @@
-URL Shortener (Production-Level Design)
+# 🔗 URL Shortener (Go + Fiber + PostgreSQL)
 
-🔹 Core Features (MVP first)
-Shorten long URL → generate short code
-Redirect short URL → original URL
-Expiry support
-Custom alias (optional)
-Analytics (click count, geo, device)
+A high-performance URL shortener backend built using **Golang**, **Fiber**, and **PostgreSQL (Supabase)**.
+Designed with production-level practices including **database-driven ID generation**, **Base62 encoding**, and **secure environment configuration**.
 
-🧠 Backend Techniques You’ll Cover
+---
 
-1. 🧩 ID Generation Strategies
+## 🚀 Features
 
-Implement multiple approaches:
+* 🔗 Shorten long URLs into compact links
+* ⚡ Fast redirection using optimized queries
+* 🧠 Base62 encoding for clean, scalable short codes
+* 🗄️ Persistent storage using PostgreSQL (Supabase)
+* 🔒 Secure configuration using environment variables
+* 🧪 REST API with proper validation & error handling
+* ♻️ Restart-safe (no in-memory dependency)
 
-Auto-increment ID + Base62 encoding
-Random string generation
-Hashing (MD5/SHA + collision handling)
-Distributed ID (Snowflake algorithm)
+---
 
-👉 Make this a pluggable service
+## 🏗️ Architecture
 
-type IDGenerator interface {
-    Generate() string
-}
+```text
+Client → Fiber (Go Backend) → PostgreSQL (Supabase)
+```
 
-2. 🗄️ Database Layer
+---
 
-Use multiple storage strategies:
+## 🔁 How It Works
 
-SQL (PostgreSQL / MySQL)
-Strong consistency
-Tables:
-urls(id, short_code, long_url, created_at, expiry)
-clicks(id, short_code, timestamp, ip, user_agent)
-NoSQL (MongoDB / DynamoDB)
-Faster writes for analytics
+### 1. Shorten URL
 
-👉 Abstract DB:
+* Client sends a long URL
+* Server validates input
+* Stores URL in database
+* Retrieves auto-generated ID
+* Converts ID → Base62 short code
+* Updates DB with short code
+* Returns short URL
 
-type URLRepository interface {
-    Save(url URL) error
-    Find(shortCode string) (URL, error)
-}
+---
 
-3. ⚡ Caching (Redis)
-Cache hot URLs
-Reduce DB hits
+### 2. Redirect
 
-Flow:
+* User accesses short URL
+* Server extracts short code
+* Fetches original URL from DB
+* Redirects user (HTTP 302)
 
-Request → Redis → DB → Cache → Response
+---
 
-4. 🌐 REST API Design
+## 🧠 Tech Stack
 
-Endpoints:
+* **Backend:** Golang
+* **Framework:** Fiber
+* **Database:** PostgreSQL (Supabase)
+* **Driver:** lib/pq
+* **Env Management:** godotenv
 
+---
+
+## ⚙️ Setup & Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/url-shortener.git
+cd url-shortener
+```
+
+---
+
+### 2. Install dependencies
+
+```bash
+go mod tidy
+```
+
+---
+
+### 3. Create `.env` file
+
+```env
+DATABASE_URL=your_postgres_connection_string
+```
+
+---
+
+### 4. Run the server
+
+```bash
+go run main.go
+```
+
+Server will start at:
+
+```
+http://localhost:3000
+```
+
+---
+
+## 📡 API Endpoints
+
+### 🔹 Health Check
+
+```http
+GET /health
+```
+
+---
+
+### 🔹 Shorten URL
+
+```http
 POST /shorten
-GET /{shortCode}
-GET /analytics/{shortCode}
+Content-Type: application/json
+```
 
-5. 🔁 Rate Limiting
-Prevent abuse
-Use:
-Token Bucket (Redis)
-IP-based throttling
+#### Request
 
-6. 📊 Analytics Pipeline
+```json
+{
+  "url": "https://example.com"
+}
+```
 
-Instead of writing clicks directly to DB:
+#### Response
 
-👉 Use event-driven system
+```json
+{
+  "short_url": "http://localhost:3000/abc"
+}
+```
 
-Push events → Queue (Kafka / RabbitMQ)
-Worker consumes → stores analytics
+---
 
-7. ⚙️ Background Jobs
-Expired URL cleanup
-Analytics aggregation
+### 🔹 Redirect
 
-8. 🔐 Security
-Validate URLs
-Prevent phishing/malicious links
-Add authentication (JWT)
+```http
+GET /:code
+```
 
-9. 🧱 Microservices (Advanced)
+---
 
-Split into:
+## 🗄️ Database Schema
 
-URL Service
-Redirect Service
-Analytics Service
+```sql
+CREATE TABLE urls (
+    id SERIAL PRIMARY KEY,
+    short_code TEXT UNIQUE,
+    long_url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-10. ☁️ Deployment Techniques
-Dockerize app
-Use Nginx as reverse proxy
-Deploy on:
-AWS / Render / Vercel
-🏗️ Suggested Tech Stack (based on your profile)
+---
 
-Since you already used Go + MERN:
+## 🔐 Environment Variables
 
-Backend:
+| Variable     | Description                  |
+| ------------ | ---------------------------- |
+| DATABASE_URL | PostgreSQL connection string |
 
-Go (Gin / Fiber)
+---
 
-DB:
+## ⚠️ Current Limitations
 
-PostgreSQL + Redis
+* No caching (Redis planned)
+* No rate limiting
+* No analytics (click tracking)
+* No custom aliases
+* No expiration support
 
-Queue:
+---
 
-Kafka (or RabbitMQ if simpler)
+## 🚀 Future Improvements
 
-📂 Project Structure
-url-shortener/
-│── cmd/
-│── internal/
-│   ├── handlers/
-│   ├── services/
-│   ├── repository/
-│   ├── models/
-│   ├── cache/
-│   ├── queue/
-│── pkg/
-│── configs/
-│── docker/
+* ⚡ Redis caching layer (performance boost)
+* 📊 Click analytics & tracking
+* 🔐 Authentication & user-based links
+* 🌐 Custom domains
+* ⏳ Link expiration support
+* 🧱 Microservices architecture
 
+---
 
+## 🧪 Example Workflow
+
+```text
+POST /shorten → DB insert → ID → Base62 → store → return short URL
+GET /abc → DB lookup → redirect to original URL
+```
+
+---
+
+## 📌 Key Learning Outcomes
+
+* Backend development in Go
+* REST API design using Fiber
+* PostgreSQL integration (cloud DB)
+* Environment-based configuration
+* Debugging real-world backend issues
+* System design fundamentals
+
+---
+
+## 👨‍💻 Author
+
+**Ayushman Mishra**
+CSE @ JIIT | Backend & Cloud Enthusiast
+
+---
+
+## ⭐ Contribute / Feedback
+
+Feel free to fork, improve, or raise issues.
+If you found this helpful, consider giving a ⭐
+
+---
