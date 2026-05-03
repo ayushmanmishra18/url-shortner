@@ -1,22 +1,19 @@
 package main
 
 import (
+	"database/sql"
+	"log"
 	"net/url"
-	"sync"
 
+	_ "github.com/lib/pq"
 	"github.com/gofiber/fiber/v2"
 )
 
-var urlStore = make(map[string]string)
-
-// mutex for thread-safe counter
-
-var mu sync.Mutex
-var counter int64 = 1
+var db *sql.DB
 
 const base62Chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-// Base62 encoder to generate short codes
+// Base62 encoder
 func encodeBase62(num int64) string {
 	if num == 0 {
 		return string(base62Chars[0])
@@ -42,6 +39,21 @@ func isValidURL(input string) bool {
 func main() {
 	app := fiber.New()
 
+	// Supabase connection (POOLER)
+	connStr := "postgres://postgres.iemvhknbvsvkhxwzhpmq:Ayushmanmishra@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
+
+	var err error
+	db, err = sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err = db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Connected to Supabase DB")
+
 	// health check
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
@@ -49,7 +61,7 @@ func main() {
 		})
 	})
 
-	// shorten URL
+	// shorten URL (DB-driven ID)
 	app.Post("/shorten", func(c *fiber.Ctx) error {
 		type Request struct {
 			URL string `json:"url"`
@@ -62,20 +74,42 @@ func main() {
 			})
 		}
 
-		// validate URL
 		if !isValidURL(body.URL) {
 			return c.Status(400).JSON(fiber.Map{
 				"error": "Invalid URL format",
 			})
 		}
 
-		// thread-safe counter increment
-		mu.Lock()
-		code := encodeBase62(counter)
-		counter++
-		mu.Unlock()
+		var id int64
 
-		urlStore[code] = body.URL
+		// Step 1: Insert URL → get ID
+		// err := db.QueryRow(
+		// 	"INSERT INTO urls (long_url) VALUES ($1) RETURNING id",
+		// 	body.URL,
+		// ).Scan(&id)
+
+		// if err != nil {
+		// 	log.Println("INSERT ERROR:", err)
+		// 	return c.Status(500).JSON(fiber.Map{
+		// 		"error": "Failed to insert URL",
+		// 	})
+		// }
+
+		// Step 2: Generate short code from ID
+		code := encodeBase62(id)
+
+		// Step 3: Update row with short_code
+		_, err = db.Exec(
+			"UPDATE urls SET short_code=$1 WHERE id=$2",
+			code, id,
+		)
+
+		if err != nil {
+			log.Println("UPDATE ERROR:", err)
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Failed to update short code",
+			})
+		}
 
 		return c.JSON(fiber.Map{
 			"short_url": "http://localhost:3000/" + code,
@@ -86,14 +120,20 @@ func main() {
 	app.Get("/:code", func(c *fiber.Ctx) error {
 		code := c.Params("code")
 
-		url, exists := urlStore[code]
-		if !exists {
+		var longURL string
+
+		err := db.QueryRow(
+			"SELECT long_url FROM urls WHERE short_code=$1",
+			code,
+		).Scan(&longURL)
+
+		if err != nil {
 			return c.Status(404).JSON(fiber.Map{
 				"error": "URL not found",
 			})
 		}
 
-		return c.Redirect(url, 302)
+		return c.Redirect(longURL, 302)
 	})
 
 	app.Listen(":3000")
