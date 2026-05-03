@@ -8,6 +8,8 @@ import (
 )
 var urlStore=make(map[string]string)
 
+
+var counter int64=1
 //generate random short code 
 
 func generateCode(n int )string{
