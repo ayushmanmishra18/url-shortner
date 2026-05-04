@@ -200,7 +200,7 @@ GET /abc → DB lookup → redirect to original URL
 * PostgreSQL integration (cloud DB)
 * Environment-based configuration
 * Debugging real-world backend issues
-* System design fundamentals
+
 
 ---
 
