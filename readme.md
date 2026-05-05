@@ -1,219 +1,91 @@
-# 🔗 URL Shortener (Go + Fiber + PostgreSQL)
+🚀 URL Shortener (Go + Fiber + PostgreSQL + Redis)
 
-A high-performance URL shortener backend built using **Golang**, **Fiber**, and **PostgreSQL (Supabase)**.
-Designed with production-level practices including **database-driven ID generation**, **Base62 encoding**, and **secure environment configuration**.
+A high-performance URL shortener built with Go (Fiber), PostgreSQL, and Redis caching.
+Designed with real backend engineering practices like caching, database indexing, and scalable architecture.
 
----
-
-## 🚀 Features
-
-* 🔗 Shorten long URLs into compact links
-* ⚡ Fast redirection using optimized queries
-* 🧠 Base62 encoding for clean, scalable short codes
-* 🗄️ Persistent storage using PostgreSQL (Supabase)
-* 🔒 Secure configuration using environment variables
-* 🧪 REST API with proper validation & error handling
-* ♻️ Restart-safe (no in-memory dependency)
-
----
-
-## 🏗️ Architecture
-
-```text
-Client → Fiber (Go Backend) → PostgreSQL (Supabase)
-```
-
----
-
-## 🔁 How It Works
-
-### 1. Shorten URL
-
-* Client sends a long URL
-* Server validates input
-* Stores URL in database
-* Retrieves auto-generated ID
-* Converts ID → Base62 short code
-* Updates DB with short code
-* Returns short URL
-
----
-
-### 2. Redirect
-
-* User accesses short URL
-* Server extracts short code
-* Fetches original URL from DB
-* Redirects user (HTTP 302)
-
----
-
-## 🧠 Tech Stack
-
-* **Backend:** Golang
-* **Framework:** Fiber
-* **Database:** PostgreSQL (Supabase)
-* **Driver:** lib/pq
-* **Env Management:** godotenv
-
----
-
-## ⚙️ Setup & Installation
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/your-username/url-shortener.git
-cd url-shortener
-```
-
----
-
-### 2. Install dependencies
-
-```bash
+🌟 Features
+🔗 Shorten long URLs into compact links
+⚡ Fast redirection using Redis cache
+🗄️ Persistent storage with PostgreSQL
+🧠 Base62 encoding for unique short codes
+⏱️ Cache with TTL for optimized performance
+📦 Clean REST API design
+🌱 Environment-based configuration
+🏗️ Tech Stack
+Backend Framework: Fiber
+Language: Go
+Database: PostgreSQL
+Cache Layer: Redis
+Driver: lib/pq
+Config: godotenv
+🧠 Architecture
+Client
+  ↓
+Fiber Server
+  ↓
+Redis (Cache Layer)
+  ↓ (miss)
+PostgreSQL (Persistent Storage)
+⚙️ Setup Instructions
+1. Clone the repository
+git clone https://github.com/your-username/url-shortner.git
+cd url-shortner
+2. Install dependencies
 go mod tidy
-```
+3. Create .env file
+DATABASE_URL=your_postgresql_connection_string
+REDIS_ADDR=localhost:6379
+4. Run Redis
 
----
+Make sure Redis is running on port 6379
 
-### 3. Create `.env` file
-
-```env
-DATABASE_URL=your_postgres_connection_string
-```
-
----
-
-### 4. Run the server
-
-```bash
+5. Run the server
 go run main.go
-```
 
 Server will start at:
 
-```
 http://localhost:3000
-```
-
----
-
-## 📡 API Endpoints
-
-### 🔹 Health Check
-
-```http
+📌 API Endpoints
+🔹 Health Check
 GET /health
-```
-
----
-
-### 🔹 Shorten URL
-
-```http
+🔹 Shorten URL
 POST /shorten
-Content-Type: application/json
-```
-
-#### Request
-
-```json
+Body:
 {
   "url": "https://example.com"
 }
-```
-
-#### Response
-
-```json
+Response:
 {
-  "short_url": "http://localhost:3000/abc"
+  "short_url": "http://localhost:3000/abc123"
 }
-```
-
----
-
-### 🔹 Redirect
-
-```http
+🔹 Redirect
 GET /:code
-```
 
----
+Redirects to original URL.
 
-## 🗄️ Database Schema
+⚡ Caching Strategy
+Type: Distributed Cache
+Strategy: Cache-Aside (Lazy Loading)
+Tool: Redis
+Flow:
+1st Request → DB → Cache → Response
+Next Requests → Cache → Response (FAST)
+🧪 Example
+curl -X POST http://localhost:3000/shorten \
+-H "Content-Type: application/json" \
+-d '{"url":"https://google.com"}'
+📊 Current Capabilities
+Handles fast read-heavy workloads
+Reduces DB load using caching
+Scalable backend structure
+🚧 Future Improvements
+📊 Click analytics (tracking visits)
+🔐 Rate limiting (Redis-based)
+⏳ URL expiration
+✨ Custom short URLs
+🌍 Deployment (Docker + Cloud)
+📈 Monitoring & logging
+👨‍💻 Author
 
-```sql
-CREATE TABLE urls (
-    id SERIAL PRIMARY KEY,
-    short_code TEXT UNIQUE,
-    long_url TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
----
-
-## 🔐 Environment Variables
-
-| Variable     | Description                  |
-| ------------ | ---------------------------- |
-| DATABASE_URL | PostgreSQL connection string |
-
----
-
-## ⚠️ Current Limitations
-
-* No caching (Redis planned)
-* No rate limiting
-* No analytics (click tracking)
-* No custom aliases
-* No expiration support
-
----
-
-## 🚀 Future Improvements
-
-* ⚡ Redis caching layer (performance boost)
-* 📊 Click analytics & tracking
-* 🔐 Authentication & user-based links
-* 🌐 Custom domains
-* ⏳ Link expiration support
-* 🧱 Microservices architecture
-
----
-
-## 🧪 Example Workflow
-
-```text
-POST /shorten → DB insert → ID → Base62 → store → return short URL
-GET /abc → DB lookup → redirect to original URL
-```
-
----
-
-## 📌 Key Learning Outcomes
-
-* Backend development in Go
-* REST API design using Fiber
-* PostgreSQL integration (cloud DB)
-* Environment-based configuration
-* Debugging real-world backend issues
-
-
----
-
-## 👨‍💻 Author
-
-**Ayushman Mishra**
+Ayushman Mishra
 CSE @ JIIT | Backend & Cloud Enthusiast
-
----
-
-## ⭐ Contribute / Feedback
-
-Feel free to fork, improve, or raise issues.
-If you found this helpful, consider giving a ⭐
-
----
