@@ -1,17 +1,22 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/url"
 	"os"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 var db *sql.DB
+var rdb *redis.Client
+var ctx = context.Background()
 
 const base62Chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -38,21 +43,20 @@ func isValidURL(input string) bool {
 
 func main() {
 
-	//  Load .env file (IMPORTANT for local dev)
+	// 🔹 Load .env
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("No .env file found (using system env)")
+		log.Println("No .env file found")
 	}
 
 	app := fiber.New()
 
-	//  Get DB connection string from env
+	// 🔹 DATABASE CONNECTION
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
 		log.Fatal("DATABASE_URL not set")
 	}
 
-	// Connect DB
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("DB OPEN ERROR:", err)
@@ -62,16 +66,33 @@ func main() {
 		log.Fatal("DB PING ERROR:", err)
 	}
 
-	log.Println("Connected to Supabase DB")
+	log.Println("✅ Connected to PostgreSQL")
 
-	// health check
+	// REDIS CONNECTION
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+
+	rdb = redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+
+	_, err = rdb.Ping(ctx).Result()
+	if err != nil {
+		log.Fatal("❌ Redis connection failed:", err)
+	}
+
+	log.Println(" Connected to Redis")
+
+	// HEALTH CHECK
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"message": "Server is running",
 		})
 	})
 
-	// shorten URL
+	// SHORTEN URL
 	app.Post("/shorten", func(c *fiber.Ctx) error {
 		type Request struct {
 			URL string `json:"url"`
@@ -121,17 +142,28 @@ func main() {
 			})
 		}
 
+		// 🔥 Store in Redis (cache it immediately)
+		rdb.Set(ctx, code, body.URL, 10*time.Minute)
+
 		return c.JSON(fiber.Map{
 			"short_url": "http://localhost:3000/" + code,
 		})
 	})
 
-	// redirect
+	//REDIRECT (WITH CACHE)
 	app.Get("/:code", func(c *fiber.Ctx) error {
 		code := c.Params("code")
 
+		// 1. Check Redis
+		val, err := rdb.Get(ctx, code).Result()
+		if err == nil {
+			log.Println("⚡ Cache HIT")
+			return c.Redirect(val, 302)
+		}
+
+		// 2. Fallback to DB
 		var longURL string
-		err := db.QueryRow(
+		err = db.QueryRow(
 			"SELECT long_url FROM urls WHERE short_code=$1",
 			code,
 		).Scan(&longURL)
@@ -142,9 +174,14 @@ func main() {
 			})
 		}
 
+		// 3. Store in Redis
+		rdb.Set(ctx, code, longURL, 10*time.Minute)
+
+		log.Println("🐢 Cache MISS → stored in Redis")
+
 		return c.Redirect(longURL, 302)
 	})
 
-	// Start server with error handling
+	// START SERVER
 	log.Fatal(app.Listen(":3000"))
 }
